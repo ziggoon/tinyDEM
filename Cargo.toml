@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-web = "4.0"
-actix-rt = "2.0"
-handlebars = { version = "3.5", features = ["dir_source"] }
-rusqlite = "0.27"
+actix-web = "4.3.1"
+handlebars = { version = "4.2.1", features = ["dir_source"] }
 serde_json = "1.0.93"
+serde = { version = "1.0.152", features = ["derive"] }
+rusqlite = "0.28.0"
+bcrypt = "0.14"

@@ -4,44 +4,123 @@ use actix_web::{
     body::BoxBody,
     dev::ServiceResponse,
     get,
+    post,
     http::{header::ContentType, StatusCode},
     middleware::{ErrorHandlerResponse, ErrorHandlers},
     web, App, HttpResponse, HttpServer, Result,
 };
 use handlebars::Handlebars;
+use rusqlite::{params, Connection};
 use serde_json::json;
+use bcrypt::{DEFAULT_COST, hash, verify};
 
-#[derive(Serialize)]
-struct LoginTemplateData {
-    error: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct LoginForm {
+#[derive(serde::Deserialize)]
+struct User {
     username: String,
     password: String,
 }
 
+fn get_user(conn: &Connection, username: &str) -> Option<User> {
+    conn.query_row(
+        "SELECT username, password FROM users WHERE username = ?1",
+        params![username],
+        |row| Ok(User {
+            username: row.get(0)?,
+            password: row.get(1)?,
+        }),
+    ).ok()
+}
+
+// Macro documentation can be found in the actix_web_codegen crate
+#[get("/")]
+async fn index(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
+    let data = json!({
+        "name": "Handlebars"
+    });
+    let body = hb.render("index", &data).unwrap();
+
+    HttpResponse::Ok().body(body)
+}
+
 #[get("/login")]
-async fn get_login_page(hb: web::Data<Handlebars<'_>>) -> Result<HttpResponse> {
-    let data = LoginTemplateData { error: None };
-    let html = hb.render("login", &data)?;
-    Ok(HttpResponse::Ok().body(html))
+async fn login_get(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
+    let body = hb.render("login", &()).unwrap();
+
+    HttpResponse::Ok().body(body)
 }
 
-async fn post_login_form(form: web::Form<LoginForm>) -> Result<HttpResponse> {
-    // Check username and password against database or other authentication mechanism
-    // ...
+#[post("/login")]
+async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<User>) -> HttpResponse {
+    let username = form.username.clone();
+    let password = form.password.clone();
+    let conn = Connection::open("credentials.db").unwrap();
 
-    // If login fails, redirect back to login page with error message
-    let error = Some("Invalid username or password".to_string());
-    let query_string = serde_urlencoded::to_string(LoginTemplateData { error })?;
-    let url = format!("/login?{}", query_string);
-    Ok(HttpResponse::SeeOther().header("Location", url).finish())
+    let user = match get_user(&conn, &username) {
+        Some(user) => user,
+        None => {
+            let html = hb.render("login", &("Invalid username or password.")).unwrap();
+            return HttpResponse::Unauthorized().body(html);
+        }
+    };
+
+    // Verify the password
+    if verify(&password, &user.password).unwrap() {
+        // Password is correct, redirect to the dashboard
+        HttpResponse::Found()
+            .header("Location", "/dashboard")
+            .finish()
+    } else {
+        // Password is incorrect, render the login form again with an error message
+        let html = hb.render("login", &("Invalid username or password.")).unwrap();
+        HttpResponse::Unauthorized().body(html)
+    }
 }
 
+#[get("/register")]
+async fn register_get(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
+    let body = hb.render("register", &()).unwrap();
+
+    HttpResponse::Ok().body(body)
+}
+#[post("/register")]
+async fn register_post(form: web::Form<User>) -> HttpResponse {
+    let username = form.username.clone();
+    let password = form.password.clone();
+    let conn = Connection::open("credentials.db").unwrap();
+
+    // hash password using bcrypt
+    let hashed_password = hash(password, DEFAULT_COST).unwrap();
+
+    // prepare and execute INSERT statement to create new user
+    let mut stmt = conn
+        .prepare("INSERT INTO users (username, password) VALUES (?, ?)")
+        .unwrap();
+    let result = stmt.execute(params![username, hashed_password]);
+
+    match result {
+        Ok(_) => HttpResponse::Ok().body("Registration successful!"),
+        Err(_) => HttpResponse::BadRequest().body("Username already taken"),
+    }
+}
+ 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
+    let conn = Connection::open("credentials.db").unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL
+        )",
+        [],
+    ).unwrap();
+
+    let password = hash("password123", DEFAULT_COST).unwrap();
+    conn.execute(
+        "INSERT OR IGNORE INTO users (username, password) VALUES (?1, ?2)",
+        params!["testuser", password],
+    ).unwrap();
+
     // Handlebars uses a repository for the compiled templates. This object must be
     // shared between the application threads, and is therefore passed to the
     // Application Builder as an atomic reference-counted pointer.
@@ -49,15 +128,17 @@ async fn main() -> io::Result<()> {
     handlebars
         .register_templates_directory(".html", "./templates")
         .unwrap();
-
     let handlebars_ref = web::Data::new(handlebars);
 
     HttpServer::new(move || {
         App::new()
             .wrap(error_handlers())
             .app_data(handlebars_ref.clone())
-            .service(get_login_page)
-            .service(web::resource("/login").route(web::post().to(post_login_form)))
+            .service(index)
+            .service(login_get)
+            .service(login_post)
+            .service(register_get)
+            .service(register_post)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
@@ -111,4 +192,3 @@ fn get_error_response<B>(res: &ServiceResponse<B>, error: &str) -> HttpResponse<
         None => fallback(error),
     }
 }
-
