@@ -7,8 +7,10 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.3.1"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.21.0"
 handlebars = { version = "4.2.1", features = ["dir_source"] }
 serde_json = "1.0.93"
 serde = { version = "1.0.152", features = ["derive"] }
-rusqlite = "0.28.0"
+rusqlite = { version = "0.28.0", features = ["bundled"] }
 bcrypt = "0.14"

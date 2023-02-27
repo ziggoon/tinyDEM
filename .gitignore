@@ -1,1 +1,8 @@
+# Rust build files
 /target
+
+# Database
+*.db
+
+# Config files
+.env

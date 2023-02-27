@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Login Page</title>
+    <title>Registration Page</title>
   </head>
   <body>
-    <h1>Login</h1>
-    <form method="post" action="/login">
+    <h1>Register</h1>
+    <form method="post" action="/register">
       <label for="username">Username:</label>
       <input type="text" id="username" name="username" required><br>
 
       <label for="password">Password:</label>
       <input type="password" id="password" name="password" required><br>
 
+      <label for="admin">Admin:</label>
+      <input type="checkbox" id="admin" name="admin" value="1"><br><br>
       <input type="submit" value="Submit">
     </form>
   </body>
