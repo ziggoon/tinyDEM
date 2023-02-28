@@ -20,8 +20,10 @@ git clone https://github.com/ziggoon/tinyDEM
 ## Author
 
 👤 **ziggoon**
+👤 **c4r3t**
 
 * Github: [@ziggoon](https://github.com/ziggoon)
+* Github: [@c4r3t](https://github.com/641i130)
 
 ## Show your support
 
