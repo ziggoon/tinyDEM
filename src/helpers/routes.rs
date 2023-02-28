@@ -10,6 +10,8 @@ use crate::helpers::db::{get_user, insert_user};
 use crate::helpers::user::{User, Login, Claims};
 use crate::agent::snmpwalk::query;
 
+use cookie::Cookie;
+
 #[get("/home")]
 async fn index(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
     let body = hb.render("index", &String::from("anon")).unwrap();
@@ -32,6 +34,7 @@ async fn login_get(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
 
 #[post("/login")]
 async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool: web::Data<Pool<SqliteConnectionManager>>) -> HttpResponse {
+    println!("Login post req");
     let form_data = Login {
         username: form.username.clone(),
         password: form.password.clone(),
@@ -40,6 +43,7 @@ async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool:
     let user = match get_user(&pool, &form_data.username) {
         Some(user) => user,
         None => {
+            println!("No user");
             let html = hb.render("login", &("Invalid username or password.")).unwrap();
             return HttpResponse::Unauthorized().body(html);
         }
@@ -61,9 +65,17 @@ async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool:
             &claims,
             &EncodingKey::from_secret(&secret.as_bytes()),
         ).unwrap();
-
+        println!("Finna send cookie");
         HttpResponse::Found()
             .header(header::AUTHORIZATION, format!("Bearer {}", token))
+            .cookie(
+                Cookie::build("auth", format!("{}",token))
+                    .domain("localhost")
+                    .path("/")
+                    .secure(true)
+                    .http_only(true) // TODO Change if we get HTTPS going
+                    .finish(),
+            )
             .header("Location", "/auth")
             .finish()
             
