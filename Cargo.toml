@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.3.1"
+actix-identity = "0.5.2"
+actix-session = { version = "0.7.2", features = ["cookie-session"] }
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 handlebars = { version = "4.2.1", features = ["dir_source"] }
@@ -17,3 +19,5 @@ bcrypt = "0.14"
 jsonwebtoken = "8.2.0"
 chrono = "0.4.23"
 snmp = "0.2.2"
+log = "0.4.0"
+env_logger = "0.9.0"

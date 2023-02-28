@@ -2,12 +2,14 @@ use std::io;
 
 use actix_web::{
     body::BoxBody,
-    dev::{Service, ServiceResponse},
+    dev::{ServiceResponse},
+    cookie::{time::Duration, Key},
     http::{header::ContentType, StatusCode},
-    middleware,
     middleware::{ErrorHandlerResponse, ErrorHandlers},
-    web, App, HttpResponse, HttpServer, Result,
+    web, middleware, App, HttpResponse, HttpServer, Result,
 };
+use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
+use actix_identity::{IdentityMiddleware};
 
 //use bcrypt::{DEFAULT_COST, hash, verify};
 use r2d2_sqlite::SqliteConnectionManager;
@@ -17,8 +19,13 @@ use serde_json::json;
 mod helpers;
 mod agent;
 
+const TEN_MINUTES: Duration = Duration::minutes(10);
+
 #[actix_web::main]
 async fn main() -> io::Result<()> {
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
+
     let manager = SqliteConnectionManager::file("credentials.db");
     let pool = r2d2::Pool::builder().max_size(10).build(manager).unwrap();
      
@@ -29,6 +36,7 @@ async fn main() -> io::Result<()> {
         .register_templates_directory(".html", "./templates")
         .unwrap();
     let handlebars_ref = web::Data::new(handlebars);
+    let secret_key = Key::generate();
 
     HttpServer::new(move || {
         let pool = pool.clone();
@@ -36,7 +44,17 @@ async fn main() -> io::Result<()> {
             .wrap(error_handlers())
             .app_data(web::Data::new(pool))
             .app_data(handlebars_ref.clone())
-            .service(web::scope("/")).configure(helpers::routes::init_routes)
+            .configure(helpers::routes::init_routes)
+            .wrap(IdentityMiddleware::default())
+            .wrap(
+                SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())
+                    .cookie_name("auth".to_owned())
+                    .cookie_secure(false)
+                    .session_lifecycle(PersistentSession::default().session_ttl(TEN_MINUTES))
+                    .build(),
+            )
+            .wrap(middleware::NormalizePath::trim())
+            .wrap(middleware::Logger::default())
     })
     .bind(("127.0.0.1", 8080))?
     .run()
