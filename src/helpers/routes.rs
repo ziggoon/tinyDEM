@@ -1,17 +1,17 @@
-use actix_web::{web, HttpResponse, HttpRequest, HttpMessage, cookie::Cookie};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use actix_identity::{Identity};
 
 use bcrypt::{DEFAULT_COST, hash, verify};
-use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{encode, EncodingKey, Header};
+
+
 use handlebars::Handlebars;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 
 use std::collections::BTreeMap;
 use crate::helpers::db::{get_user, insert_user};
-use crate::helpers::user::{User, Login, Claims};
-use crate::agent::snmpwalk::query;
+use crate::helpers::user::{User, Login};
+
 
 async fn index(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
     let id = match identity.map(|id| id.id()) {
@@ -22,7 +22,7 @@ async fn index(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> Htt
     //println!("userid: {:?}", id);
 
     let mut data = BTreeMap::new();
-    data.insert("name".to_string(), id.to_string());
+    data.insert("name".to_string(), id);
 
     let body = hb.render("index", &data).unwrap();
     HttpResponse::Ok().body(body)
@@ -36,7 +36,7 @@ async fn dashboard(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) ->
     };
     //println!("userid: {:?}", id);
     let mut data = BTreeMap::new();
-    data.insert("name".to_string(), id.to_string());
+    data.insert("name".to_string(), id);
     let body = hb.render("dashboard", &data).unwrap();
     HttpResponse::Ok().body(body) 
 }
@@ -66,9 +66,9 @@ async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool:
 
     // Verify the password
     if verify(&form_data.password, &user.password).unwrap() {
-        Identity::login(&_req.extensions(), form_data.username.to_owned()).unwrap();
+        Identity::login(&_req.extensions(), form_data.username).unwrap();
         HttpResponse::Found()
-            .header("Location", "/dashboard")
+            .append_header(("Location", "/dashboard"))
             .finish()    
     } else {
         // Password is incorrect, render the login form again with an error message
@@ -86,7 +86,7 @@ async fn register_post(pool: web::Data<Pool<SqliteConnectionManager>>, form: web
     let user = User {
         username: form.username.clone(),
         password: hash(form.password.clone(), DEFAULT_COST).unwrap(),
-        admin: form.admin.clone(),
+        admin: form.admin,
     };
 
     let result = insert_user(&pool, user);
