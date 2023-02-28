@@ -14,3 +14,6 @@ serde_json = "1.0.93"
 serde = { version = "1.0.152", features = ["derive"] }
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 bcrypt = "0.14"
+jsonwebtoken = "8.2.0"
+chrono = "0.4.23"
+snmp = "0.2.2"

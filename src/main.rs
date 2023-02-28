@@ -2,8 +2,9 @@ use std::io;
 
 use actix_web::{
     body::BoxBody,
-    dev::ServiceResponse,
+    dev::{Service, ServiceResponse},
     http::{header::ContentType, StatusCode},
+    middleware,
     middleware::{ErrorHandlerResponse, ErrorHandlers},
     web, App, HttpResponse, HttpServer, Result,
 };
@@ -14,16 +15,13 @@ use handlebars::Handlebars;
 use serde_json::json;
  
 mod helpers;
+mod agent;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
     let manager = SqliteConnectionManager::file("credentials.db");
     let pool = r2d2::Pool::builder().max_size(10).build(manager).unwrap();
-    let test_user = helpers::user::User {
-        username: String::from("tester"),
-        password: String::from("test123"),
-        admin: 0,
-    }; 
+     
     helpers::db::init_db(&pool.clone());
     
     let mut handlebars = Handlebars::new();

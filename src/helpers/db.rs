@@ -1,5 +1,4 @@
 use rusqlite::params;
-use actix_web::web;
 use r2d2::{Pool, PooledConnection};
 use r2d2_sqlite::SqliteConnectionManager;
 
@@ -31,7 +30,7 @@ pub fn get_user(pool: &Pool<SqliteConnectionManager>, username: &str) -> Option<
     ).ok()
 }
 
-pub fn insert_user(pool: web::Data<Pool<SqliteConnectionManager>>, user: User) -> Result<(), Box<dyn std::error::Error>> {
+pub fn insert_user(pool: &Pool<SqliteConnectionManager>, user: User) -> Result<(), Box<dyn std::error::Error>> {
     let conn: PooledConnection<SqliteConnectionManager> = pool.get().unwrap();
     let mut stmt = conn
         .prepare("INSERT INTO users (username, password, admin) VALUES (?, ?, ?)")
