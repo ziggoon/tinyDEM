@@ -1,6 +1,7 @@
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use actix_web::HttpResponse;
-use crate::helpers::user::{User, Login, Claims};
+use actix_web::{HttpResponse};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+
+use crate::helpers::user::Claims;
 
 pub fn check_token(_token: &str) -> Result<(), HttpResponse> {
     let secret = String::from("s3cr3t_k3y");

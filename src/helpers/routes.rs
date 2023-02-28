@@ -1,39 +1,54 @@
-use actix_web::{get, post, web, HttpResponse, HttpRequest, http::header};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage, cookie::Cookie};
+use actix_identity::{Identity};
+
 use bcrypt::{DEFAULT_COST, hash, verify};
+use chrono::{DateTime, Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use handlebars::Handlebars;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use chrono::{DateTime, Duration, Utc};
 
+use std::collections::BTreeMap;
 use crate::helpers::db::{get_user, insert_user};
 use crate::helpers::user::{User, Login, Claims};
 use crate::agent::snmpwalk::query;
 
-use cookie::Cookie;
+async fn index(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
+    let id = match identity.map(|id| id.id()) {
+        None => "anonymous".to_owned(),
+        Some(Ok(id)) => id,
+        Some(Err(_err)) => return HttpResponse::InternalServerError().body("err"),
+    };
+    //println!("userid: {:?}", id);
 
-#[get("/home")]
-async fn index(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
-    let body = hb.render("index", &String::from("anon")).unwrap();
+    let mut data = BTreeMap::new();
+    data.insert("name".to_string(), id.to_string());
+
+    let body = hb.render("index", &data).unwrap();
     HttpResponse::Ok().body(body)
 }
 
-#[get("/auth")]
-async fn authed(hb: web::Data<Handlebars<'_>>, _req: HttpRequest) -> HttpResponse {
-    query();
-    let body = hb.render("authed", &()).unwrap();
-    HttpResponse::Ok().body(body)
+async fn dashboard(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
+    let id = match identity.map(|id| id.id()) {
+        None => return HttpResponse::Unauthorized().body("auth required"),
+        Some(Ok(id)) => id,
+        Some(Err(_err)) => return HttpResponse::InternalServerError().body("err"),
+    };
+    //println!("userid: {:?}", id);
+    let mut data = BTreeMap::new();
+    data.insert("name".to_string(), id.to_string());
+    let body = hb.render("dashboard", &data).unwrap();
+    HttpResponse::Ok().body(body) 
 }
 
-#[get("/login")]
-async fn login_get(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
+
+
+async fn login_get(hb: web::Data<Handlebars<'_>>, _req: HttpRequest) -> HttpResponse {
     let body = hb.render("login", &()).unwrap();
-
     HttpResponse::Ok().body(body)
 }
 
-#[post("/login")]
-async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool: web::Data<Pool<SqliteConnectionManager>>) -> HttpResponse {
+async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool: web::Data<Pool<SqliteConnectionManager>>, _req: HttpRequest) -> HttpResponse {
     println!("Login post req");
     let form_data = Login {
         username: form.username.clone(),
@@ -51,34 +66,10 @@ async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool:
 
     // Verify the password
     if verify(&form_data.password, &user.password).unwrap() {
-        // Password is correct, redirect to the dashboard
-        let secret = String::from("s3cr3t_k3y");
-        let mut _date: DateTime<Utc> = Utc::now() + Duration::hours(1);
-
-        let claims = Claims {
-            username: form_data.password.clone(),
-            tstamp: _date.timestamp() as usize,
-        };
-
-        let token = encode(
-            &Header::default(),
-            &claims,
-            &EncodingKey::from_secret(&secret.as_bytes()),
-        ).unwrap();
-        println!("Finna send cookie");
+        Identity::login(&_req.extensions(), form_data.username.to_owned()).unwrap();
         HttpResponse::Found()
-            .header(header::AUTHORIZATION, format!("Bearer {}", token))
-            .cookie(
-                Cookie::build("auth", format!("{}",token))
-                    .domain("localhost")
-                    .path("/")
-                    .secure(true)
-                    .http_only(true) // TODO Change if we get HTTPS going
-                    .finish(),
-            )
-            .header("Location", "/auth")
-            .finish()
-            
+            .header("Location", "/dashboard")
+            .finish()    
     } else {
         // Password is incorrect, render the login form again with an error message
         let html = hb.render("login", &("Invalid username or password.")).unwrap();
@@ -86,15 +77,12 @@ async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool:
     }
 }
 
-#[get("/register")]
-async fn register_get(hb: web::Data<Handlebars<'_>>) -> HttpResponse {
+async fn register_get(hb: web::Data<Handlebars<'_>>, _req: HttpRequest) -> HttpResponse {
     let body = hb.render("register", &()).unwrap();
-
     HttpResponse::Ok().body(body)
 }
 
-#[post("/register")]
-async fn register_post(pool: web::Data<Pool<SqliteConnectionManager>>, form: web::Form<User>) -> HttpResponse {
+async fn register_post(pool: web::Data<Pool<SqliteConnectionManager>>, form: web::Form<User>, _req: HttpRequest) -> HttpResponse {
     let user = User {
         username: form.username.clone(),
         password: hash(form.password.clone(), DEFAULT_COST).unwrap(),
@@ -110,10 +98,18 @@ async fn register_post(pool: web::Data<Pool<SqliteConnectionManager>>, form: web
 }
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(index);
-    cfg.service(authed);
-    cfg.service(login_get);
-    cfg.service(login_post);
-    cfg.service(register_get);
-    cfg.service(register_post);
+    cfg.service(web::resource("/login")
+        .route(web::get().to(login_get))
+        .route(web::post().to(login_post))
+    );
+    cfg.service(web::resource("/register")
+        .route(web::get().to(register_get))
+        .route(web::post().to(register_post))
+    );
+    cfg.service(web::resource("/dashboard")
+        .route(web::get().to(dashboard))
+    );
+    cfg.service(web::resource("/")
+        .route(web::get().to(index))
+    );
 }
