@@ -40,7 +40,35 @@ async fn dashboard(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) ->
     HttpResponse::Ok().body(body) 
 }
 
+async fn chart(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
+    let id = match identity.map(|id| id.id()) {
+        None => return HttpResponse::Unauthorized().body("auth required"),
+        Some(Ok(id)) => id,
+        Some(Err(_err)) => return HttpResponse::InternalServerError().body("err"),
+    };
+    let body = hb.render("charts", &()).unwrap();
+    HttpResponse::Ok().body(body)
+}
 
+async fn form(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
+    let id = match identity.map(|id| id.id()) {
+        None => return HttpResponse::Unauthorized().body("auth required"),
+        Some(Ok(id)) => id,
+        Some(Err(_err)) => return HttpResponse::InternalServerError().body("err"),
+    };
+    let body = hb.render("forms", &()).unwrap();
+    HttpResponse::Ok().body(body)
+}
+
+async fn table(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
+    let id = match identity.map(|id| id.id()) {
+        None => return HttpResponse::Unauthorized().body("auth required"),
+        Some(Ok(id)) => id,
+        Some(Err(_err)) => return HttpResponse::InternalServerError().body("err"),
+    };
+    let body = hb.render("tables", &()).unwrap();
+    HttpResponse::Ok().body(body)
+}
 
 async fn login_get(hb: web::Data<Handlebars<'_>>, _req: HttpRequest) -> HttpResponse {
     let body = hb.render("login", &()).unwrap();
@@ -107,6 +135,15 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
     );
     cfg.service(web::resource("/dashboard")
         .route(web::get().to(dashboard))
+    );
+    cfg.service(web::resource("/charts")
+        .route(web::get().to(chart))
+    );
+    cfg.service(web::resource("/forms")
+        .route(web::get().to(form))
+    );
+    cfg.service(web::resource("/tables")
+        .route(web::get().to(table))
     );
     cfg.service(web::resource("/")
         .route(web::get().to(index))
