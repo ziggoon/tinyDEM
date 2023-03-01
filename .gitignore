@@ -6,3 +6,6 @@
 
 # Config files
 .env
+
+# whatever this is :)
+.DS_Store

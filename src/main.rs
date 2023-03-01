@@ -10,6 +10,7 @@ use actix_web::{
 };
 use actix_session::{config::PersistentSession, storage::CookieSessionStore, SessionMiddleware};
 use actix_identity::{IdentityMiddleware};
+use actix_files::Files;
 
 //use bcrypt::{DEFAULT_COST, hash, verify};
 use r2d2_sqlite::SqliteConnectionManager;
@@ -24,7 +25,6 @@ const TEN_MINUTES: Duration = Duration::minutes(10);
 #[actix_web::main]
 async fn main() -> io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-
 
     let manager = SqliteConnectionManager::file("credentials.db");
     let pool = r2d2::Pool::builder().max_size(10).build(manager).unwrap();
@@ -45,6 +45,11 @@ async fn main() -> io::Result<()> {
             .app_data(web::Data::new(pool))
             .app_data(handlebars_ref.clone())
             .configure(helpers::routes::init_routes)
+            .service(Files::new("/css", "./static/css").show_files_listing())
+            .service(Files::new("/js", "./static/js").show_files_listing())
+            .service(Files::new("/img", "./static/img").show_files_listing())
+            .service(Files::new("/data", "./static/data").show_files_listing())
+            .service(Files::new("/vendor", "./static/vendor").show_files_listing())
             .wrap(IdentityMiddleware::default())
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), secret_key.clone())

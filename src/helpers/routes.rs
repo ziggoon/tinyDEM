@@ -3,7 +3,6 @@ use actix_identity::{Identity};
 
 use bcrypt::{DEFAULT_COST, hash, verify};
 
-
 use handlebars::Handlebars;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -15,14 +14,14 @@ use crate::helpers::user::{User, Login};
 
 async fn index(hb: web::Data<Handlebars<'_>>, identity: Option<Identity>) -> HttpResponse {
     let id = match identity.map(|id| id.id()) {
-        None => "anonymous".to_owned(),
+        None => return HttpResponse::Unauthorized().body("auth required"),
         Some(Ok(id)) => id,
         Some(Err(_err)) => return HttpResponse::InternalServerError().body("err"),
     };
     //println!("userid: {:?}", id);
 
     let mut data = BTreeMap::new();
-    data.insert("name".to_string(), id);
+    data.insert("username".to_string(), id);
 
     let body = hb.render("index", &data).unwrap();
     HttpResponse::Ok().body(body)
@@ -68,7 +67,7 @@ async fn login_post(hb: web::Data<Handlebars<'_>>, form: web::Form<Login>, pool:
     if verify(&form_data.password, &user.password).unwrap() {
         Identity::login(&_req.extensions(), form_data.username).unwrap();
         HttpResponse::Found()
-            .append_header(("Location", "/dashboard"))
+            .append_header(("Location", "/"))
             .finish()    
     } else {
         // Password is incorrect, render the login form again with an error message
